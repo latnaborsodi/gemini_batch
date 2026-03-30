@@ -127,7 +127,7 @@ module GeminiBatch
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = true
       http.read_timeout = 120
-      http.open_timeout = 30
+      http.open_timeout = 60
 
       request = Net::HTTP::Post.new(uri)
       request['Content-Type'] = 'application/json'
