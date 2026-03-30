@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'gemini_batch/configuration'
+require_relative 'gemini_batch/request_builder'
 require_relative 'gemini_batch/client'
 
 module GeminiBatch
