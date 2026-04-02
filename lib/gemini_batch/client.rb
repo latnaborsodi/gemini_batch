@@ -74,8 +74,9 @@ module GeminiBatch
 
       state = response['state'] || response.dig('metadata', 'state') || ''
       case state.to_s.upcase
-      when 'JOB_STATE_SUCCEEDED', 'SUCCEEDED' then :succeeded
-      when 'JOB_STATE_FAILED', 'FAILED' then :failed
+      when 'JOB_STATE_SUCCEEDED', 'SUCCEEDED', 'BATCH_STATE_SUCCEEDED' then :succeeded
+      when 'JOB_STATE_FAILED', 'FAILED', 'BATCH_STATE_FAILED',
+           'JOB_STATE_CANCELLED', 'BATCH_STATE_CANCELLED' then :failed
       else :processing
       end
     end
@@ -199,13 +200,16 @@ module GeminiBatch
       { name: file['name'], uri: file['uri'] }
     end
 
-    def create_batch(file_uri)
-      # POST /v1beta/batches — file-based batch job endpoint
-      # (NOT models/{model}:batchGenerateContent which only supports inline requests)
-      url = "#{API_BASE}/v1beta/batches?key=#{@api_key}"
+    def create_batch(file_name)
+      # POST models/{model}:batchGenerateContent with batch.input_config.file_name
+      url = "#{API_BASE}/v1beta/models/#{@model}:batchGenerateContent?key=#{@api_key}"
       body = {
-        model: "models/#{@model}",
-        src: file_uri
+        batch: {
+          display_name: "batch_#{Time.now.strftime('%Y%m%d_%H%M%S')}",
+          input_config: {
+            file_name: file_name
+          }
+        }
       }
       http_post(url, body)
     end
@@ -232,7 +236,8 @@ module GeminiBatch
     end
 
     def download_file(file_path)
-      url = "#{API_BASE}/v1beta/#{file_path}?key=#{@api_key}&alt=media"
+      # Use /download/ prefix and :download suffix per Batch API docs
+      url = "#{API_BASE}/download/v1beta/#{file_path}:download?key=#{@api_key}&alt=media"
       uri = URI(url)
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = true
@@ -247,8 +252,11 @@ module GeminiBatch
     end
 
     def extract_output_file(batch_response)
-      # /v1beta/batches API uses 'dest' field for output file
-      batch_response['dest'] ||
+      # Try various response formats from different API versions
+      batch_response.dig('response', 'responsesFile') ||
+        batch_response.dig('metadata', 'output', 'responsesFile') ||
+        batch_response['dest'] ||
+        batch_response.dig('dest', 'fileName') ||
         batch_response['outputFile'] ||
         batch_response.dig('metadata', 'outputFile') ||
         batch_response.dig('response', 'outputFile')
