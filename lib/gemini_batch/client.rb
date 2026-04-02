@@ -59,7 +59,8 @@ module GeminiBatch
     def submit_batch(builder)
       jsonl = builder.to_jsonl
       file_info = upload_file(jsonl)
-      batch_info = create_batch(file_info[:uri])
+      # Use file name (e.g. "files/abc123") as src, not the full URI
+      batch_info = create_batch(file_info[:name])
       {
         batch_name: batch_info['name'],
         file_name: file_info[:name],
@@ -199,8 +200,13 @@ module GeminiBatch
     end
 
     def create_batch(file_uri)
-      url = "#{API_BASE}/v1beta/models/#{@model}:batchGenerateContent?key=#{@api_key}"
-      body = { requests_file_uri: file_uri }
+      # POST /v1beta/batches — file-based batch job endpoint
+      # (NOT models/{model}:batchGenerateContent which only supports inline requests)
+      url = "#{API_BASE}/v1beta/batches?key=#{@api_key}"
+      body = {
+        model: "models/#{@model}",
+        src: file_uri
+      }
       http_post(url, body)
     end
 
@@ -241,7 +247,9 @@ module GeminiBatch
     end
 
     def extract_output_file(batch_response)
-      batch_response['outputFile'] ||
+      # /v1beta/batches API uses 'dest' field for output file
+      batch_response['dest'] ||
+        batch_response['outputFile'] ||
         batch_response.dig('metadata', 'outputFile') ||
         batch_response.dig('response', 'outputFile')
     end
