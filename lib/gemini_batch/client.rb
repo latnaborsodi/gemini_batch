@@ -95,10 +95,23 @@ module GeminiBatch
     def wait_until_done(batch_name, poll_interval: nil, max_polls: nil)
       interval = poll_interval || @config.poll_interval
       max = max_polls || @config.max_polls
+      retries = 0
 
-      max.times do
-        status = check_batch_status(batch_name)
-        return status if status != :processing
+      max.times do |i|
+        begin
+          status = check_batch_status(batch_name)
+          retries = 0 # Reset on success
+          return status if status != :processing
+        rescue StandardError => e
+          retries += 1
+          if retries <= 5
+            $stderr.puts "  WARN: Poll ##{i} failed (#{e.message}), retry #{retries}/5..."
+            sleep(interval)
+            next
+          else
+            raise
+          end
+        end
         sleep(interval)
       end
 
